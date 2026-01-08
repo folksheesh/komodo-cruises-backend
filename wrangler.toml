@@ -1,0 +1,7 @@
+name = "komodo-cruises-api"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Untuk testing lokal
+[env.dev]
+name = "komodo-cruises-api-dev"
