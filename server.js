@@ -15,6 +15,7 @@ const GOOGLE_API_KEY =
 const SPREADSHEET_ID = "1FqMYrf_uVoL_lU2WuoFj_59rXPHttuAqDI_mxnVN42I";
 const SHEET_NAME = "2026 OT (Normalized)";
 const CABIN_DETAIL_SHEET = "Cabin Detail";
+const SHIP_DETAIL_SHEET = "Ship Detail";
 
 const OT2026 = [
   "SEMESTA VOYAGES",
@@ -59,6 +60,25 @@ app.get("/", async (req, res) => {
           sourceSheet: `${x} (Normalized)`,
         })),
       });
+    }
+
+    // === API: Ship Detail ===
+    if (resource === "shipdetail") {
+      const details = await loadShipDetailCached();
+      const shipName = req.query.name;
+
+      if (shipName) {
+        const found = details.find(
+          (s) => s.ship_name?.toUpperCase() === shipName.toUpperCase()
+        );
+        if (!found)
+          return res.json({
+            ok: false,
+            error: `Ship '${shipName}' not found`,
+          });
+        return res.json({ ok: true, data: found });
+      }
+      return res.json({ ok: true, total: details.length, data: details });
     }
 
     // === Fetch Main Data (Normalized) ===
@@ -115,6 +135,8 @@ const cache = {
   sheetDataTimestamp: 0,
   cabinDetail: null,
   cabinDetailTimestamp: 0,
+  shipDetail: null,
+  shipDetailTimestamp: 0,
 };
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -252,6 +274,68 @@ async function loadCabinDetailCached() {
   cache.cabinDetail = list;
   cache.cabinDetailTimestamp = Date.now();
   console.log("Cabin detail cached successfully");
+
+  return list;
+}
+
+async function loadShipDetailCached() {
+  // Return cached data if valid
+  if (cache.shipDetail && isCacheValid(cache.shipDetailTimestamp)) {
+    console.log("Using cached ship detail data");
+    return cache.shipDetail;
+  }
+
+  console.log("Fetching fresh ship detail from Google Sheets...");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
+    SHIP_DETAIL_SHEET
+  )}?key=${GOOGLE_API_KEY}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    throw new Error(`Gagal fetch Ship Detail (${resp.status}): ${errorText}`);
+  }
+  const json = await resp.json();
+  const rows = json.values;
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h) => (h || "").toLowerCase().trim());
+  const list = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const obj = {};
+    headers.forEach((h, idx) => {
+      const v = (row[idx] || "").toString().trim();
+      if (h && v !== "") obj[h] = v;
+    });
+
+    // Skip if no ship name
+    const shipName = obj["name boat"] || obj["ship name"] || obj["name"] || "";
+    if (!shipName) continue;
+
+    // Extract images from URL fields
+    const images = [];
+    Object.values(obj).forEach((v) => {
+      if (typeof v === "string" && /^https?:\/\//i.test(v)) images.push(v);
+    });
+
+    list.push({
+      ship_name: shipName.trim(),
+      description: obj["description"] || obj["desc"] || "",
+      capacity: Number(obj["capacity"] || obj["pax"] || 0),
+      cabins: Number(obj["cabins"] || obj["total cabins"] || 0),
+      length: obj["length"] || "",
+      built: obj["built"] || obj["year"] || "",
+      images: images,
+      image_main: images[0] || "",
+      ...obj, // Include all other fields
+    });
+  }
+
+  // Store in cache
+  cache.shipDetail = list;
+  cache.shipDetailTimestamp = Date.now();
+  console.log("Ship detail cached successfully");
 
   return list;
 }
