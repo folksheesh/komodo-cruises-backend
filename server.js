@@ -108,10 +108,33 @@ app.get("/", async (req, res) => {
 });
 
 /* =======================================================================
+ * CACHING SYSTEM
+ * =======================================================================*/
+const cache = {
+  sheetData: null,
+  sheetDataTimestamp: 0,
+  cabinDetail: null,
+  cabinDetailTimestamp: 0,
+};
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+function isCacheValid(timestamp) {
+  return Date.now() - timestamp < CACHE_TTL;
+}
+
+/* =======================================================================
  * DATA FETCHING LAYERS
  * =======================================================================*/
 
 async function loadSheetDataCached(sheetName) {
+  // Return cached data if valid
+  if (cache.sheetData && isCacheValid(cache.sheetDataTimestamp)) {
+    console.log("Using cached sheet data");
+    return cache.sheetData;
+  }
+
+  console.log("Fetching fresh sheet data from Google Sheets...");
   const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?includeGridData=true&ranges=${encodeURIComponent(
     sheetName
   )}&fields=sheets(data(rowData(values(formattedValue,userEnteredFormat(backgroundColor)))))&key=${GOOGLE_API_KEY}`;
@@ -148,10 +171,23 @@ async function loadSheetDataCached(sheetName) {
     backgrounds.push(bgRow);
   });
 
-  return { values, backgrounds };
+  // Store in cache
+  const data = { values, backgrounds };
+  cache.sheetData = data;
+  cache.sheetDataTimestamp = Date.now();
+  console.log("Sheet data cached successfully");
+
+  return data;
 }
 
 async function loadCabinDetailCached() {
+  // Return cached data if valid
+  if (cache.cabinDetail && isCacheValid(cache.cabinDetailTimestamp)) {
+    console.log("Using cached cabin detail data");
+    return cache.cabinDetail;
+  }
+
+  console.log("Fetching fresh cabin detail from Google Sheets...");
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
     CABIN_DETAIL_SHEET
   )}?key=${GOOGLE_API_KEY}`;
@@ -211,6 +247,12 @@ async function loadCabinDetailCached() {
       image_main,
     });
   }
+
+  // Store in cache
+  cache.cabinDetail = list;
+  cache.cabinDetailTimestamp = Date.now();
+  console.log("Cabin detail cached successfully");
+
   return list;
 }
 
