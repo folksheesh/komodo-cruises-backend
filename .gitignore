@@ -1,5 +1,5 @@
-node_modules
-.wrangler
-.dev.vars
-dist
-npm-debug.log
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
