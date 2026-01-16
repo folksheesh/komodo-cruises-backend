@@ -186,9 +186,20 @@ app.get("/", async (req, res) => {
     // === API: Cabins List ===
     if (resource === "cabins") {
       const sheetName = sheet || SHEET_NAME;
-      const sheetData = await loadSheetDataCached(sheetName);
-      const allCabins = listCabinsAll(sheetData);
-      return jsonOk(res, { cabins: allCabins });
+      try {
+        const sheetData = await loadSheetDataCached(sheetName);
+        const allCabins = listCabinsAll(sheetData);
+        return jsonOk(res, { cabins: allCabins });
+      } catch (err) {
+        console.warn(
+          `[Cabins] Sheet "${sheetName}" not found or error: ${err.message}`
+        );
+        // Return empty array instead of error for non-existent sheets
+        return jsonOk(res, {
+          cabins: [],
+          warning: `Sheet "${sheetName}" not available`,
+        });
+      }
     }
 
     // Validasi Date untuk Availability & Search
