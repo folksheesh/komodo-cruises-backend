@@ -24,13 +24,14 @@ const XENDIT_AUTH = Buffer.from(XENDIT_SECRET_KEY + ":").toString("base64");
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM || "booking@komodocruises.com";
 
-if (!RESEND_API_KEY) {
-  console.warn(
-    "⚠️  RESEND_API_KEY is not set. Email sending will fail until you set it in the environment."
-  );
+// Make Resend optional - only initialize if API key is present
+let resend = null;
+if (RESEND_API_KEY) {
+  resend = new Resend(RESEND_API_KEY);
+  console.log("✅ Resend email service initialized");
+} else {
+  console.warn("⚠️  RESEND_API_KEY is not set. Email sending is disabled.");
 }
-
-const resend = new Resend(RESEND_API_KEY);
 
 // Middleware
 app.use(cors());
